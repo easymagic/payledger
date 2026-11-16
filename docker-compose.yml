@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: payledger
+      POSTGRES_USER: payledger
+      POSTGRES_PASSWORD: payledger
+    ports:
+      - "5432:5432"
+    volumes:
+      - payledger_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payledger -d payledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: payledger
+      DB_USER: payledger
+      DB_PASSWORD: payledger
+      SERVER_PORT: 8080
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  payledger_pg:
