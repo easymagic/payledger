@@ -8,6 +8,7 @@ import com.payledger.exception.ResourceNotFoundException;
 import com.payledger.repository.CustomerRepository;
 import com.payledger.repository.MerchantRepository;
 import com.payledger.repository.WalletRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,7 @@ public class WalletService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(cacheNames = "merchantBalances", key = "#merchantId + ':' + #currency")
     public BigDecimal sumMerchantBalance(UUID merchantId, String currency) {
         if (!merchantRepository.existsById(merchantId)) {
             throw new ResourceNotFoundException("Merchant", merchantId);
@@ -45,8 +47,7 @@ public class WalletService {
     }
 
     /**
-     * Convenience bootstrap used by tests and local demos: merchant → customer → wallet.
-     * Production onboarding belongs in a later milestone.
+     * Demo bootstrap: merchant → customer → wallet. Prefer admin for cross-merchant provisioning.
      */
     @Transactional
     public WalletProvisionResult provisionWallet(

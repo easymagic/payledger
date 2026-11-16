@@ -2,6 +2,7 @@ package com.payledger.web;
 
 import com.payledger.domain.TransactionStatus;
 import com.payledger.domain.TransactionType;
+import com.payledger.security.MerchantAccessService;
 import com.payledger.service.TransactionQueryService;
 import com.payledger.web.dto.TransactionResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,9 +28,13 @@ import java.util.UUID;
 public class TransactionController {
 
     private final TransactionQueryService transactionQueryService;
+    private final MerchantAccessService merchantAccessService;
 
-    public TransactionController(TransactionQueryService transactionQueryService) {
+    public TransactionController(
+            TransactionQueryService transactionQueryService,
+            MerchantAccessService merchantAccessService) {
         this.transactionQueryService = transactionQueryService;
+        this.merchantAccessService = merchantAccessService;
     }
 
     @GetMapping
@@ -41,12 +46,19 @@ public class TransactionController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        if (walletId != null) {
+            merchantAccessService.requireWalletAccess(walletId);
+        } else if (!merchantAccessService.requirePrincipal().isAdmin()) {
+            throw new com.payledger.exception.AccessDeniedBusinessException(
+                    "walletId is required for merchant-scoped transaction search");
+        }
         return transactionQueryService.search(walletId, type, status, from, to, pageable);
     }
 
     @GetMapping("/wallets/{walletId}/summaries")
     @Operation(summary = "List transaction summaries for a wallet (interface projection)")
     public List<TransactionResponse> summaries(@PathVariable UUID walletId) {
+        merchantAccessService.requireWalletAccess(walletId);
         return transactionQueryService.summariesForWallet(walletId);
     }
 }

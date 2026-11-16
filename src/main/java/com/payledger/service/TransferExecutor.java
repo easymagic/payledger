@@ -11,8 +11,11 @@ import com.payledger.exception.InsufficientBalanceException;
 import com.payledger.exception.ResourceNotFoundException;
 import com.payledger.repository.TransactionRepository;
 import com.payledger.repository.WalletRepository;
+import com.payledger.webhook.WebhookEventTypes;
+import com.payledger.webhook.WebhookOutboxService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,10 +32,18 @@ public class TransferExecutor {
 
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
+    private final WebhookOutboxService webhookOutboxService;
+    private final CacheEvictionService cacheEvictionService;
 
-    public TransferExecutor(WalletRepository walletRepository, TransactionRepository transactionRepository) {
+    public TransferExecutor(
+            WalletRepository walletRepository,
+            TransactionRepository transactionRepository,
+            WebhookOutboxService webhookOutboxService,
+            CacheEvictionService cacheEvictionService) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
+        this.webhookOutboxService = webhookOutboxService;
+        this.cacheEvictionService = cacheEvictionService;
     }
 
     @Transactional
@@ -42,9 +53,9 @@ public class TransferExecutor {
             return replayOrConflict(existing.get(), command);
         }
 
-        Wallet source = walletRepository.findById(command.sourceWalletId())
+        Wallet source = walletRepository.findWithCustomerById(command.sourceWalletId())
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet", command.sourceWalletId()));
-        Wallet destination = walletRepository.findById(command.destinationWalletId())
+        Wallet destination = walletRepository.findWithCustomerById(command.destinationWalletId())
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet", command.destinationWalletId()));
 
         if (source.getId().equals(destination.getId())) {
@@ -82,6 +93,12 @@ public class TransferExecutor {
                 correlationId
         );
         transactionRepository.save(tx);
+
+        webhookOutboxService.enqueueForTransaction(tx, WebhookEventTypes.TRANSFER_COMPLETED);
+        cacheEvictionService.evictAfterLedgerWrite(
+                source.getCustomer().getMerchant().getId(),
+                source.getId(),
+                destination.getId());
 
         log.info("Transfer completed: {} {} from {} to {} (key={})",
                 amount.getAmount(), amount.getCurrency(),

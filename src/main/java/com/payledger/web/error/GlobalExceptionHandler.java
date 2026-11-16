@@ -1,9 +1,11 @@
 package com.payledger.web.error;
 
+import com.payledger.exception.AccessDeniedBusinessException;
 import com.payledger.exception.ConcurrentModificationException;
 import com.payledger.exception.CurrencyMismatchException;
 import com.payledger.exception.IdempotencyConflictException;
 import com.payledger.exception.InsufficientBalanceException;
+import com.payledger.exception.OverRefundException;
 import com.payledger.exception.ResourceNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -41,6 +43,16 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(OverRefundException.class)
+    public ProblemDetail handleOverRefund(OverRefundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Over-refund");
+        problem.setType(URI.create("https://payledger.dev/problems/over-refund"));
+        problem.setProperty("originalTransactionId", ex.getOriginalTransactionId());
+        problem.setProperty("remainingRefundable", ex.getRemainingRefundable());
+        return problem;
+    }
+
     @ExceptionHandler(CurrencyMismatchException.class)
     public ProblemDetail handleCurrencyMismatch(CurrencyMismatchException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
@@ -63,6 +75,14 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setTitle("Concurrent modification");
         problem.setType(URI.create("https://payledger.dev/problems/concurrent-modification"));
+        return problem;
+    }
+
+    @ExceptionHandler(AccessDeniedBusinessException.class)
+    public ProblemDetail handleAccessDenied(AccessDeniedBusinessException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problem.setTitle("Forbidden");
+        problem.setType(URI.create("https://payledger.dev/problems/forbidden"));
         return problem;
     }
 

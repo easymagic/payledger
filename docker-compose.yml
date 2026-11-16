@@ -15,19 +15,37 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   app:
     build: .
     ports:
       - "8080:8080"
     environment:
+      SPRING_PROFILES_ACTIVE: redis
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: payledger
       DB_USER: payledger
       DB_PASSWORD: payledger
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_TYPE: redis
       SERVER_PORT: 8080
+      JWT_SECRET: payledger-dev-secret-change-me-please-32bytes-min
+      DEMO_USERS_ENABLED: "true"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: on-failure
 

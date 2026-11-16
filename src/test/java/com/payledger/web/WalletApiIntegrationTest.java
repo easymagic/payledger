@@ -1,13 +1,11 @@
 package com.payledger.web;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payledger.support.AbstractIntegrationTest;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.util.UUID;
@@ -21,16 +19,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class WalletApiIntegrationTest extends AbstractIntegrationTest {
 
-    @Autowired
-    MockMvc mockMvc;
-    @Autowired
-    ObjectMapper objectMapper;
-
     @Test
     void provisionTransferAndSearch_endToEnd() throws Exception {
+        String token = loginAdmin();
         String suffix = UUID.randomUUID().toString();
 
         MvcResult sourceResult = mockMvc.perform(post("/api/v1/wallets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -48,6 +43,7 @@ class WalletApiIntegrationTest extends AbstractIntegrationTest {
                 .andReturn();
 
         MvcResult destResult = mockMvc.perform(post("/api/v1/wallets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -70,6 +66,7 @@ class WalletApiIntegrationTest extends AbstractIntegrationTest {
         String key = "api-idem-" + suffix;
 
         mockMvc.perform(post("/api/v1/transfers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -86,6 +83,7 @@ class WalletApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.type").value("TRANSFER"));
 
         mockMvc.perform(post("/api/v1/transfers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -100,28 +98,34 @@ class WalletApiIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.replayed").value(true));
 
-        mockMvc.perform(get("/api/v1/wallets/" + sourceId))
+        mockMvc.perform(get("/api/v1/wallets/" + sourceId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.balance.amount").value(125.0));
 
         mockMvc.perform(get("/api/v1/transactions")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .param("walletId", sourceId)
                         .param("type", "TRANSFER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].type").value("TRANSFER"));
 
-        mockMvc.perform(get("/api/v1/transactions/wallets/" + sourceId + "/summaries"))
+        mockMvc.perform(get("/api/v1/transactions/wallets/" + sourceId + "/summaries")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].idempotencyKey").value(key));
 
-        mockMvc.perform(get("/api/v1/wallets/" + UUID.randomUUID()))
+        mockMvc.perform(get("/api/v1/wallets/" + UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Resource not found"));
     }
 
     @Test
     void validationFailure_returnsProblemDetails() throws Exception {
+        String token = loginAdmin();
         MvcResult result = mockMvc.perform(post("/api/v1/transfers")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -138,5 +142,13 @@ class WalletApiIntegrationTest extends AbstractIntegrationTest {
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(body.get("title").asText()).isEqualTo("Validation failed");
         assertThat(body.get("errors")).isNotNull();
+    }
+
+    @Test
+    void unauthenticatedWrite_returns401() throws Exception {
+        mockMvc.perform(post("/api/v1/transfers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 }

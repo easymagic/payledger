@@ -16,6 +16,14 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  cache:
+    type: ${CACHE_TYPE:simple}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 server:
   port: ${SERVER_PORT:8080}
@@ -26,18 +34,21 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when_authorized
   info:
     env:
       enabled: true
+  metrics:
+    tags:
+      application: payledger
 
 info:
   app:
     name: PayLedger
-    description: Payments and wallet API (Milestone 1)
+    description: Payments and wallet API (milestones 1–5)
     version: 0.1.0-SNAPSHOT
 
 springdoc:
@@ -45,6 +56,27 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+payledger:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:payledger-dev-secret-change-me-please-32bytes-min}
+      expiry-minutes: ${JWT_EXPIRY_MINUTES:120}
+    demo-users:
+      enabled: ${DEMO_USERS_ENABLED:true}
+      admin-username: ${DEMO_ADMIN_USER:admin}
+      admin-password: ${DEMO_ADMIN_PASSWORD:admin-change-me}
+      merchant-username: ${DEMO_MERCHANT_USER:merchant}
+      merchant-password: ${DEMO_MERCHANT_PASSWORD:merchant-change-me}
+      merchant-name: Demo Merchant
+      merchant-email: merchant@payledger.local
+  webhooks:
+    max-attempts: 5
+    batch-size: 20
+    base-backoff-seconds: 1
+    poll-interval-ms: 2000
+  kafka:
+    webhook-topic: payledger.webhooks
 
 logging:
   level:

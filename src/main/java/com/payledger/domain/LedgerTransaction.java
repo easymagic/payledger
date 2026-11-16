@@ -71,6 +71,13 @@ public class LedgerTransaction extends AuditableEntity {
     @Column(name = "correlation_id")
     private UUID correlationId;
 
+    /**
+     * For REFUND rows, the original ledger entry being reversed.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_transaction_id")
+    private LedgerTransaction relatedTransaction;
+
     protected LedgerTransaction() {
     }
 
@@ -83,6 +90,19 @@ public class LedgerTransaction extends AuditableEntity {
             String idempotencyKey,
             String description,
             UUID correlationId) {
+        this(wallet, counterpartyWallet, type, status, money, idempotencyKey, description, correlationId, null);
+    }
+
+    public LedgerTransaction(
+            Wallet wallet,
+            Wallet counterpartyWallet,
+            TransactionType type,
+            TransactionStatus status,
+            Money money,
+            String idempotencyKey,
+            String description,
+            UUID correlationId,
+            LedgerTransaction relatedTransaction) {
         this.wallet = wallet;
         this.counterpartyWallet = counterpartyWallet;
         this.type = type;
@@ -91,6 +111,7 @@ public class LedgerTransaction extends AuditableEntity {
         this.idempotencyKey = idempotencyKey;
         this.description = description;
         this.correlationId = correlationId;
+        this.relatedTransaction = relatedTransaction;
     }
 
     public UUID getId() {
@@ -131,5 +152,9 @@ public class LedgerTransaction extends AuditableEntity {
 
     public UUID getCorrelationId() {
         return correlationId;
+    }
+
+    public LedgerTransaction getRelatedTransaction() {
+        return relatedTransaction;
     }
 }

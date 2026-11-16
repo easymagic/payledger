@@ -1,7 +1,9 @@
 package com.payledger.service;
 
 import com.payledger.exception.ConcurrentModificationException;
+import com.payledger.metrics.PayLedgerMetrics;
 import com.payledger.repository.TransactionRepository;
+import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.OptimisticLockException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,10 +19,15 @@ public class TransferService {
 
     private final TransferExecutor transferExecutor;
     private final TransactionRepository transactionRepository;
+    private final PayLedgerMetrics metrics;
 
-    public TransferService(TransferExecutor transferExecutor, TransactionRepository transactionRepository) {
+    public TransferService(
+            TransferExecutor transferExecutor,
+            TransactionRepository transactionRepository,
+            PayLedgerMetrics metrics) {
         this.transferExecutor = transferExecutor;
         this.transactionRepository = transactionRepository;
+        this.metrics = metrics;
     }
 
     /**
@@ -30,29 +37,35 @@ public class TransferService {
      */
     public TransferResult transfer(TransferCommand command) {
         validateCommand(command);
+        Timer.Sample sample = metrics.startTransfer();
 
-        var existing = transactionRepository.findByIdempotencyKey(command.idempotencyKey());
-        if (existing.isPresent()) {
-            return transferExecutor.replayOrConflict(existing.get(), command);
-        }
-
-        int attempt = 0;
-        while (true) {
-            try {
-                return transferExecutor.execute(command);
-            } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
-                attempt++;
-                log.warn("Optimistic lock conflict on transfer (attempt {}/{}): {}",
-                        attempt, MAX_OPTIMISTIC_RETRIES, ex.getMessage());
-                if (attempt >= MAX_OPTIMISTIC_RETRIES) {
-                    throw new ConcurrentModificationException(
-                            "Transfer could not be completed due to concurrent wallet updates. Please retry.");
-                }
-            } catch (DataIntegrityViolationException ex) {
-                var raced = transactionRepository.findByIdempotencyKey(command.idempotencyKey())
-                        .orElseThrow(() -> ex);
-                return transferExecutor.replayOrConflict(raced, command);
+        try {
+            var existing = transactionRepository.findByIdempotencyKey(command.idempotencyKey());
+            if (existing.isPresent()) {
+                return transferExecutor.replayOrConflict(existing.get(), command);
             }
+
+            int attempt = 0;
+            while (true) {
+                try {
+                    return transferExecutor.execute(command);
+                } catch (ObjectOptimisticLockingFailureException | OptimisticLockException ex) {
+                    attempt++;
+                    metrics.incrementOptimisticLockRetry();
+                    log.warn("Optimistic lock conflict on transfer (attempt {}/{}): {}",
+                            attempt, MAX_OPTIMISTIC_RETRIES, ex.getMessage());
+                    if (attempt >= MAX_OPTIMISTIC_RETRIES) {
+                        throw new ConcurrentModificationException(
+                                "Transfer could not be completed due to concurrent wallet updates. Please retry.");
+                    }
+                } catch (DataIntegrityViolationException ex) {
+                    var raced = transactionRepository.findByIdempotencyKey(command.idempotencyKey())
+                            .orElseThrow(() -> ex);
+                    return transferExecutor.replayOrConflict(raced, command);
+                }
+            }
+        } finally {
+            metrics.recordTransfer(sample);
         }
     }
 

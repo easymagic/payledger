@@ -1,0 +1,13 @@
+# Optional Kafka fan-out for webhook outbox events.
+# Activate with SPRING_PROFILES_ACTIVE=kafka (can combine: prod,redis,kafka)
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+payledger:
+  kafka:
+    webhook-topic: ${KAFKA_WEBHOOK_TOPIC:payledger.webhooks}
