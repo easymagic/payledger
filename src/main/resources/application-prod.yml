@@ -1,0 +1,29 @@
+# Production-oriented profile: env-based config only. Activate with SPRING_PROFILES_ACTIVE=prod,redis
+spring:
+  cache:
+    type: redis
+  jpa:
+    open-in-view: false
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+payledger:
+  security:
+    demo-users:
+      enabled: false
+  webhooks:
+    poll-interval-ms: 5000
+    base-backoff-seconds: 5
+
+logging:
+  level:
+    root: info
+    com.payledger: info
+    org.hibernate.SQL: warn
